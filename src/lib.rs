@@ -4,7 +4,7 @@ mod auth;
 mod context;
 pub mod identity;
 
-pub use auth::{Auth, TokenProvider};
+pub use auth::{Auth, TokenSource};
 pub use context::Context;
 pub use identity::Identity;
 

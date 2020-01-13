@@ -1,6 +1,9 @@
 use clap::{App, Arg};
 use reqwest::Client;
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use iotedge_aad::{Auth, Context, Identity, Result};
 
@@ -15,33 +18,45 @@ async fn main() -> Result<()> {
         .subcommand(
             App::new("identity")
                 .subcommand(App::new("list"))
-                .subcommand(App::new("create").arg(Arg::with_name("module name").required(true)))
+                .subcommand(
+                    App::new("provision")
+                        .arg(Arg::with_name("module name").required(true))
+                        .arg(Arg::with_name("cert").long("cert").takes_value(true)),
+                )
                 .subcommand(App::new("delete").arg(Arg::with_name("module name").required(true))),
         )
         .subcommand(App::new("token").arg(Arg::with_name("module name").required(true)))
-        //        .subcommand(App::new("storageaccount").short("sa").arg(Arg::with_name("module name").required(true)))
         .get_matches();
 
     let context = Context::from(Path::new("context.json"))?;
 
     let client = Arc::new(Client::new());
-    let auth = Auth::authorize(client.clone(), context).await?;
+    let auth = Auth::new(client.clone());
+    let auth = auth
+        .authorize_with_secret(
+            context.tenant_id(),
+            context.client_id(),
+            context.client_secret(),
+        )
+        .await?;
 
     match app.subcommand() {
         ("identity", Some(matches)) => {
             let identity = Identity::new(client, auth);
             match matches.subcommand() {
-                ("create", Some(args)) => {
+                ("provision", Some(args)) => {
                     let name = args.value_of("module name").unwrap();
+                    let cert_path = args.value_of("cert").map(PathBuf::from);
                     println!("Creating module identity for module '{}'", name);
 
-                    identity.provision(name).await
+                    let created = identity.provision(name, cert_path).await?;
+                    println!("Created new identity: {}", created.app_id);
                 }
                 ("delete", Some(args)) => {
                     let name = args.value_of("module name").unwrap();
                     println!("Deleting module identity for module '{}'", name);
 
-                    identity.delete(name).await
+                    identity.delete(name).await?;
                 }
                 _ => unreachable!(),
             }
@@ -53,4 +68,5 @@ async fn main() -> Result<()> {
         }
         _ => unreachable!(),
     }
+    Ok(())
 }
