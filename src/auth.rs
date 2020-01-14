@@ -9,11 +9,22 @@ use std::sync::Arc;
 
 pub struct Auth {
     client: Arc<Client>,
+    resource: &'static str,
 }
 
 impl Auth {
-    pub fn new(client: Arc<Client>) -> Self {
-        Self { client }
+    pub fn graph(client: Arc<Client>) -> Self {
+        Self {
+            client,
+            resource: "https://graph.microsoft.com",
+        }
+    }
+
+    pub fn azure(client: Arc<Client>) -> Self {
+        Self {
+            client,
+            resource: "https://management.azure.com",
+        }
     }
 
     pub async fn authorize_with_secret(
@@ -25,7 +36,7 @@ impl Auth {
         let scope = "https://graph.microsoft.com/.default";
 
         let url = format!(
-            "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
+            "https://login.microsoftonline.com/{}/oauth2/token",
             tenant_id
         );
         let body: String = url::form_urlencoded::Serializer::new(String::new())
@@ -67,13 +78,14 @@ impl Auth {
         let scope = "https://graph.microsoft.com/.default";
 
         let url = format!(
-            "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
+            "https://login.microsoftonline.com/{}/oauth2/token",
             tenant_id
         );
         let body: String = url::form_urlencoded::Serializer::new(String::new())
             .append_pair("grant_type", "client_credentials")
             .append_pair("client_id", client_id)
             .append_pair("scope", scope)
+            .append_pair("resource", self.resource)
             .append_pair(
                 "client_assertion_type",
                 "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
@@ -160,8 +172,10 @@ pub trait TokenSource {
 #[derive(Deserialize)]
 struct TokenResponse {
     token_type: String,
-    expires_in: u32,
-    ext_expires_in: u32,
+    expires_in: String,
+    ext_expires_in: String,
+    // expires_in: u32,
+    // ext_expires_in: u32,
     access_token: String,
 }
 
@@ -182,17 +196,14 @@ mod tests {
     use std::{path::Path, sync::Arc};
 
     #[tokio::test]
+    #[ignore = "Provision app with secret in advance"]
     async fn it_obtains_auth_token_with_secret() {
         // let context = Context::new(String::default(), String::default(), String::default());
         let context = Context::from(std::path::Path::new("context.json")).unwrap();
-        let auth = Auth::new(Arc::new(Client::new()));
+        let auth = Auth::graph(Arc::new(Client::new()));
 
         let auth = auth
-            .authorize_with_secret(
-                context.tenant_id(),
-                context.client_id(),
-                context.client_secret(),
-            )
+            .authorize_with_secret(context.tenant_id(), context.client_id(), "secret")
             .await;
 
         assert_matches!(auth, Ok(auth) if !auth.get().is_empty());
@@ -201,7 +212,7 @@ mod tests {
     #[tokio::test]
     async fn it_obtains_auth_token_for_module() {
         let context = Context::from(Path::new("context-module-a.json")).unwrap();
-        let auth = Auth::new(Arc::new(Client::new()));
+        let auth = Auth::azure(Arc::new(Client::new()));
         let cert_path = Path::new("module-a/combined.pem");
 
         let auth = auth

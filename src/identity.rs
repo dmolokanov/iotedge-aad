@@ -43,6 +43,7 @@ where
         };
 
         let credentials = self.build_application_credentials(name, &module_cert_path)?;
+
         // TODO add default role assignments for identity
         let body = json!(
         {
@@ -113,7 +114,7 @@ where
 
         let cert_value = String::from_utf8(cert.to_pem()?)?;
         let cert_value = cert_value.replace("-----BEGIN CERTIFICATE-----\n", "");
-        let cert_value = cert_value.replace("-----END CERTIFICATE-----\n", "");
+        let cert_value = cert_value.replace("\n-----END CERTIFICATE-----\n", "");
 
         let start_date = asn_time_to_iso_string(&cert.not_before().to_string())?;
         let end_date = asn_time_to_iso_string(&cert.not_after().to_string())?;
@@ -165,14 +166,11 @@ mod tests {
     #[tokio::test]
     async fn it_creates_application() {
         let client = Arc::new(Client::new());
-        let auth = Auth::new(client.clone());
+        let auth = Auth::graph(client.clone());
         let context = Context::from(Path::new("context.json")).unwrap();
+        let cert_path = Path::new(context.cert());
         let auth = auth
-            .authorize_with_secret(
-                context.tenant_id(),
-                context.client_id(),
-                context.client_secret(),
-            )
+            .authorize_with_certificate(context.tenant_id(), context.client_id(), cert_path)
             .await;
         let cert_path = Some(PathBuf::from("module-a/combined.pem"));
         let identity = Identity::new(client, auth.unwrap());
