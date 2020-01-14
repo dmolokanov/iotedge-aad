@@ -1,4 +1,5 @@
 use crate::{Result, TokenSource};
+use chrono::NaiveDateTime;
 use hex::ToHex;
 use openssl::x509::X509;
 use reqwest::{Client, StatusCode};
@@ -8,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+use uuid::Uuid;
 
 pub struct Identity<A> {
     client: Arc<Client>,
@@ -113,27 +115,25 @@ where
         let cert_value = cert_value.replace("-----BEGIN CERTIFICATE-----\n", "");
         let cert_value = cert_value.replace("-----END CERTIFICATE-----\n", "");
 
-        // let start_date = cert.not_before().to_string();
-        let start_date = "2020-01-11T08:06:37.14591Z"; // TODO read from cert
-
-        // let end_date = cert.not_after().to_string();
-        let end_date = "2021-01-11T08:06:37.14591Z"; // TODO read from cert
+        let start_date = asn_time_to_iso_string(&cert.not_before().to_string())?;
+        let end_date = asn_time_to_iso_string(&cert.not_after().to_string())?;
 
         let fingerprint = cert.digest(openssl::hash::MessageDigest::sha1())?;
         let fingerprint = fingerprint.encode_hex_upper::<String>();
-        println!("Fingerprint: {:?}", fingerprint);
 
         let credentials = json!(
-            [{
-                "startDateTime": start_date,
-                "endDateTime": end_date,
-                "keyId": uuid::Uuid::new_v4(),
-                "key": cert_value,
-                "usage": "Verify",
-                "type": "AsymmetricX509Cert",
-                "customKeyIdentifier": fingerprint,
-                "displayName": format!("{}-cert", name)
-            }]
+            [
+                {
+                    "startDateTime": start_date,
+                    "endDateTime": end_date,
+                    "keyId": Uuid::new_v4(),
+                    "key": cert_value,
+                    "usage": "Verify",
+                    "type": "AsymmetricX509Cert",
+                    "customKeyIdentifier": fingerprint,
+                    "displayName": format!("{}-cert", name)
+                }
+            ]
         );
 
         Ok(credentials)
@@ -142,6 +142,11 @@ where
     pub async fn delete(&self, _name: &str) -> Result<()> {
         unimplemented!()
     }
+}
+
+fn asn_time_to_iso_string(date: &str) -> Result<String> {
+    let parsed = NaiveDateTime::parse_from_str(date, "%b %e %T %Y GMT")?;
+    Ok(parsed.format("%FT%TZ").to_string())
 }
 
 #[derive(Debug)]
@@ -175,5 +180,14 @@ mod tests {
         let created = identity.provision("module-a", cert_path).await;
 
         assert_matches!(created, Ok(created) if !created.app_id.is_empty());
+    }
+
+    #[test]
+    fn it_parses_cert_time() {
+        let date = "Jan 11 08:06:36 2020 GMT";
+
+        let iso = asn_time_to_iso_string(date);
+
+        assert_matches!(iso, Ok(date) if date == "2020-01-11T08:06:36Z");
     }
 }
