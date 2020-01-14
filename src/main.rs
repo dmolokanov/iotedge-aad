@@ -15,6 +15,12 @@ use iotedge_aad::{Auth, Context, Identity, Result};
 #[tokio::main]
 async fn main() -> Result<()> {
     let app = App::new("iotedge aad module identities integration")
+        .arg(
+            Arg::with_name("context")
+                .long("context")
+                .short("c")
+                .default_value("context.json"),
+        )
         .subcommand(
             App::new("identity")
                 .subcommand(App::new("list"))
@@ -28,15 +34,16 @@ async fn main() -> Result<()> {
         .subcommand(App::new("token").arg(Arg::with_name("module name").required(true)))
         .get_matches();
 
-    let context = Context::from(Path::new("context.json"))?;
+    let context = app.value_of("context").unwrap();
+    let context = Context::from(Path::new(context))?;
 
     let client = Arc::new(Client::new());
     let auth = Auth::new(client.clone());
     let auth = auth
-        .authorize_with_secret(
+        .authorize_with_certificate(
             context.tenant_id(),
             context.client_id(),
-            context.client_secret(),
+            PathBuf::from(context.cert()).as_path(),
         )
         .await?;
 

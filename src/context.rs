@@ -7,7 +7,7 @@ use std::path::Path;
 #[serde(rename_all(deserialize = "camelCase"))]
 pub struct Context {
     client_id: String,
-    client_secret: String,
+    cert: String,
     tenant_id: String,
 }
 
@@ -19,10 +19,10 @@ impl Context {
         Ok(context)
     }
 
-    pub fn new(client_id: String, client_secret: String, tenant_id: String) -> Self {
+    pub fn new(client_id: String, cert: String, tenant_id: String) -> Self {
         Self {
             client_id,
-            client_secret,
+            cert,
             tenant_id,
         }
     }
@@ -31,8 +31,8 @@ impl Context {
         &self.client_id
     }
 
-    pub fn client_secret(&self) -> &str {
-        &self.client_secret
+    pub fn cert(&self) -> &str {
+        &self.cert
     }
 
     pub fn tenant_id(&self) -> &str {
